@@ -1,0 +1,4 @@
+import { NextResponse } from 'next/server';
+import { decryptSecret } from '@/lib/encryption';
+import { requireUser } from '@/lib/server-auth';
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) { const { id } = await context.params; const { supabase, user, response } = await requireUser(); if (response || !user) return response!; const { data, error } = await supabase.from('accounts').select('encrypted_password').eq('id', id).single(); if (error || !data?.encrypted_password) return NextResponse.json({ error: '密码不可用' }, { status: 404 }); let password = ''; try { password = decryptSecret(data.encrypted_password); } catch { return NextResponse.json({ error: '密码解密失败' }, { status: 500 }); } await supabase.from('operation_logs').insert({ user_id: user.id, action_type: 'view_password', target_type: 'account', target_id: id, description: '查看账号密码' }); return NextResponse.json({ password }); }
