@@ -4,7 +4,8 @@ export type RunningType = { id: string; school_id: string | null; name: string; 
 export type FaceOption = { id: string; running_type_id: string | null; name: string; created_at: string; running_type?: RunningType | null };
 export type Account = {
   id: string; school_id: string | null; category_id: string | null; running_type_id?: string | null; face_option_id?: string | null; username: string; encrypted_password?: string | null;
-  distance_per_run: number; order_count: number; order_time: string; created_at: string; updated_at: string;
+  distance_per_run: number; order_count: number; order_time: string; running_time?: string | null; created_at: string; updated_at: string;
+  campus_name?: string | null; fence_name?: string | null; student_name?: string | null; student_id?: string | null;
   note?: string | null; deleted_at?: string | null; school?: School | null; category?: Category | null; running_type?: RunningType | null; face_option?: FaceOption | null; progress?: Progress;
   sport_world_accounts?: SportWorldAccount | SportWorldAccount[] | null;
 };

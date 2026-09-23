@@ -34,7 +34,11 @@ export function faceOptionsForSelection(faceOptions: FaceOption[], availableType
 export function accountMatchesFilters(account: Account, filters: AccountFilterValues, now = new Date()) {
   const term = filters.search.trim().toLowerCase();
   const schoolName = account.school?.name?.toLowerCase() || '';
-  const matchesSearch = !term || account.username.toLowerCase().includes(term) || schoolName.includes(term);
+  const matchesSearch = Boolean(!term
+    || account.username.toLowerCase().includes(term)
+    || schoolName.includes(term)
+    || account.student_name?.toLowerCase().includes(term)
+    || account.student_id?.toLowerCase().includes(term));
   const matchesCategory = !filters.category || account.category_id === filters.category;
   const matchesSchool = !filters.school || account.school_id === filters.school;
   const matchesRunningType = !filters.runningType || account.running_type_id === filters.runningType;

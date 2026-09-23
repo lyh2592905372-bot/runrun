@@ -3,14 +3,14 @@ import { z } from 'zod';
 import { configurationError, findConfigurationByName } from '@/lib/configuration-crud';
 import { requireUser } from '@/lib/server-auth';
 
-const schema = z.object({ name: z.string().trim().min(1).max(120), category_id: z.string().uuid() });
+const schema = z.object({ name: z.string().trim().min(1).max(120) });
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const { supabase, response } = await requireUser();
   if (response) return response;
   const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: '请选择账号分类并填写学校名称' }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: '请填写学校名称' }, { status: 400 });
   try {
     const duplicate = await findConfigurationByName(supabase, 'schools', parsed.data.name);
     if (duplicate && duplicate.id !== id) return NextResponse.json({ error: '已存在同名学校' }, { status: 409 });

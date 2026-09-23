@@ -28,13 +28,14 @@ assert.deepEqual(faceOptionsForSelection(faceOptions, runningTypes, '', '', 'typ
 
 const account = {
   id: 'account-a', category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-a', face_option_id: 'face-a',
-  username: 'runner-001', order_time: '2026-09-20T10:00:00.000Z', school: schools[0],
+  username: 'runner-001', student_name: '张三', student_id: '20260001', order_time: '2026-09-20T10:00:00.000Z', school: schools[0],
 };
 const matching = {
   search: '南通', category: 'category-a', school: 'school-a', runningType: 'type-a', faceOption: 'face-a',
   dateFilter: 'custom', dateFrom: '2026-09-20', dateTo: '2026-09-20',
 };
 assert.equal(accountMatchesFilters(account, matching, new Date('2026-09-20T12:00:00.000Z')), true);
+assert.equal(accountMatchesFilters(account, { ...matching, search: '20260001' }, new Date('2026-09-20T12:00:00.000Z')), true);
 for (const [key, value] of [
   ['search', '不存在'], ['category', 'category-b'], ['school', 'school-b'], ['runningType', 'type-b'],
   ['faceOption', 'face-b'], ['dateFrom', '2026-09-21'],

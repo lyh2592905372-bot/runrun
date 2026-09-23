@@ -92,9 +92,6 @@ export async function resolveAccountConfiguration(supabase: SupabaseClient, inpu
   const school = await resolveOrCreate(supabase, input.school, {
     table: 'schools',
     label: '学校',
-    parentColumn: 'category_id',
-    parentId: category.id,
-    globallyUniqueName: true,
   });
 
   let runningType: ConfigurationRecord | null = null;
@@ -102,8 +99,6 @@ export async function resolveAccountConfiguration(supabase: SupabaseClient, inpu
     runningType = await resolveOrCreate(supabase, input.running_type, {
       table: 'running_types',
       label: '跑步类型',
-      parentColumn: 'school_id',
-      parentId: school.id,
     });
   }
 

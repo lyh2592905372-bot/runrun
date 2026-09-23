@@ -10,11 +10,11 @@ export type AccountHierarchy = {
 export async function validateAccountHierarchy(supabase: SupabaseClient, values: AccountHierarchy) {
   const { data: school, error: schoolError } = await supabase
     .from('schools')
-    .select('category_id')
+    .select('id')
     .eq('id', values.school_id)
     .maybeSingle();
-  if (schoolError || !school || school.category_id !== values.category_id) {
-    return '所选学校不属于当前账号分类';
+  if (schoolError || !school) {
+    return '所选学校不存在';
   }
 
   if (!values.running_type_id) {
@@ -23,11 +23,11 @@ export async function validateAccountHierarchy(supabase: SupabaseClient, values:
 
   const { data: runningType, error: runningTypeError } = await supabase
     .from('running_types')
-    .select('school_id')
+    .select('id')
     .eq('id', values.running_type_id)
     .maybeSingle();
-  if (runningTypeError || !runningType || runningType.school_id !== values.school_id) {
-    return '所选跑步类型不属于当前学校';
+  if (runningTypeError || !runningType) {
+    return '所选跑步类型不存在';
   }
 
   if (!values.face_option_id) return null;

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { encryptSecret, encryptSportSecret } from '@/lib/encryption';
 import { requireUser } from '@/lib/server-auth';
 import { validateAccountHierarchy } from '@/lib/account-hierarchy';
-import { accountInputSchema } from '@/lib/account-input';
+import { accountFieldsFromInput, accountInputSchema } from '@/lib/account-input';
 import { ConfigurationResolutionError, resolveAccountConfiguration } from '@/lib/configuration-resolution';
 
 function accountSaveError(error: unknown) {
@@ -24,26 +24,59 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message || '参数错误' }, { status: 400 });
 
   try {
+    const { data: existingAccount, error: existingAccountError } = await supabase.from('accounts').select('id,username,encrypted_password,school_id,running_type_id,face_option_id,order_time,running_time').eq('id', id).single();
+    if (existingAccountError || !existingAccount) return NextResponse.json({ error: '账号不存在' }, { status: 404 });
     const configuration = await resolveAccountConfiguration(supabase, body.data);
-    const { password, sport_account, sport_password, category: _category, school: _school, running_type: _runningType, face_option: _faceOption, ...accountFields } = body.data;
-    const values = { ...accountFields, ...configuration };
+    if (body.data.running_type === null && existingAccount.school_id === configuration.school_id) {
+      configuration.running_type_id = existingAccount.running_type_id;
+      configuration.face_option_id = existingAccount.face_option_id;
+    }
     const hierarchyError = await validateAccountHierarchy(supabase, configuration);
     if (hierarchyError) return NextResponse.json({ error: hierarchyError }, { status: 400 });
 
+    const [{ data: categoryRecord, error: categoryError }, { data: existingSport, error: existingSportError }] = await Promise.all([
+      supabase.from('account_categories').select('name').eq('id', configuration.category_id).single(),
+      supabase.from('sport_world_accounts').select('id,sport_account,sport_password_encrypted').eq('account_record_id', id).maybeSingle(),
+    ]);
+    if (categoryError) throw categoryError;
+    if (existingSportError) throw existingSportError;
+    const isSportWorld = categoryRecord.name === '运动世界';
+    const isAlipaySunshine = categoryRecord.name === '支付宝阳光跑';
+    const inputUsername = body.data.username;
+    const username = isAlipaySunshine ? inputUsername || existingAccount.username : inputUsername;
+    if (!username) return NextResponse.json({ error: '账号不能为空' }, { status: 400 });
+    const { password, sport_account, sport_password } = body.data;
+    const accountFields = accountFieldsFromInput(body.data);
+    const values = { ...accountFields, username, ...configuration };
+    const explicitlyUnbound = Boolean(existingSport && !existingSport.sport_account);
+    const accountChanged = username !== existingAccount.username;
+    const passwordChanged = Boolean(password);
+    const shouldSaveSportCredentials = isSportWorld
+      ? !explicitlyUnbound || accountChanged || passwordChanged
+      : Boolean(existingSport) || Boolean(sport_account || sport_password);
+    const legacyLoginAccount = existingSport && username === existingAccount.username ? existingSport.sport_account : username;
+    const loginAccount = isSportWorld ? username : existingSport ? legacyLoginAccount : sport_account;
+    const loginPassword = isSportWorld || existingSport ? password : sport_password;
+    if (shouldSaveSportCredentials && !loginAccount) return NextResponse.json({ error: '请填写运动世界账号' }, { status: 400 });
+    if (shouldSaveSportCredentials && !existingSport && !loginPassword && !existingAccount.encrypted_password) return NextResponse.json({ error: '首次绑定需要填写运动世界密码' }, { status: 400 });
+    if (shouldSaveSportCredentials && explicitlyUnbound && accountChanged && !loginPassword) return NextResponse.json({ error: '重新绑定需要填写运动世界密码' }, { status: 400 });
+
     const update: Record<string, unknown> = { ...values };
+    if (existingAccount.order_time && new Date(existingAccount.order_time).getTime() === new Date(body.data.order_time).getTime()) delete update.order_time;
+    if (body.data.running_time === undefined || existingAccount.running_time === body.data.running_time) delete update.running_time;
     if (password) update.encrypted_password = encryptSecret(password);
     const { error } = await supabase.from('accounts').update(update).eq('id', id);
     if (error) throw error;
-    const { data: existingSport } = await supabase.from('sport_world_accounts').select('id,sport_account,sport_password_encrypted').eq('account_record_id', id).maybeSingle();
-    if (sport_account || sport_password) {
-      if (!sport_account && !existingSport?.sport_account) return NextResponse.json({ error: '请填写运动世界账号' }, { status: 400 });
-      const sportUpdate: Record<string, unknown> = { account_record_id: id, sport_account: sport_account || existingSport?.sport_account };
-      if (sport_password) sportUpdate.sport_password_encrypted = encryptSportSecret(sport_password);
-      if (!existingSport && !sport_password) return NextResponse.json({ error: '首次绑定需要填写运动世界密码' }, { status: 400 });
+    if (shouldSaveSportCredentials) {
+      const sportUpdate: Record<string, unknown> = { account_record_id: id, sport_account: loginAccount };
+      if (loginPassword) sportUpdate.sport_password_encrypted = encryptSportSecret(loginPassword);
+      if (isSportWorld && (loginAccount !== existingSport?.sport_account || Boolean(loginPassword))) {
+        Object.assign(sportUpdate, { sport_token_encrypted: null, sport_uid: null, sport_unid: null, token_status: 'unknown' });
+      }
       const { error: sportError } = await supabase.from('sport_world_accounts').upsert(sportUpdate, { onConflict: 'account_record_id' });
       if (sportError) throw sportError;
     }
-    await supabase.from('operation_logs').insert({ user_id: user.id, action_type: sport_account || sport_password ? 'edit_sport_world_binding' : 'edit_account', target_type: 'account', target_id: id, description: sport_account || sport_password ? '修改运动世界绑定信息' : password ? '编辑账号，密码已修改' : '编辑账号' });
+    await supabase.from('operation_logs').insert({ user_id: user.id, action_type: shouldSaveSportCredentials ? 'edit_sport_world_binding' : 'edit_account', target_type: 'account', target_id: id, description: shouldSaveSportCredentials ? '修改运动世界绑定信息' : password ? '编辑账号，密码已修改' : '编辑账号' });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return accountSaveError(error);

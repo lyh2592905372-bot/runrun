@@ -10,6 +10,6 @@ button, input, select, textarea { font: inherit; }
   .card { @apply rounded-xl border border-slate-200 bg-white shadow-soft; }
   .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50; }
   .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50; }
-  .input { @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-brand-100 transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4; }
+  .input { @apply min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-brand-100 transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4; }
   .label { @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500; }
 }

@@ -31,8 +31,10 @@ const client = clientWith({
 });
 
 assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-a', face_option_id: 'face-a' }), null);
-assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-b' }), '所选学校不属于当前账号分类');
-assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-b' }), '所选跑步类型不属于当前学校');
+assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-b' }), null);
+assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-b' }), null);
+assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-missing' }), '所选学校不存在');
+assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-missing' }), '所选跑步类型不存在');
 assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', face_option_id: 'face-a' }), '选择是否人脸前请先选择跑步类型');
 assert.equal(await validateAccountHierarchy(client, { category_id: 'category-a', school_id: 'school-a', running_type_id: 'type-a', face_option_id: 'face-b' }), '所选人脸类型不属于当前跑步类型');
 

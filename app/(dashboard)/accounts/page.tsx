@@ -16,13 +16,15 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/page-header";
 import { AccountModal } from "@/components/accounts/account-modal";
 import { api } from "@/lib/api";
-import { accountMatchesFilters, faceOptionsForSelection, runningTypesForSelection, schoolsForCategory } from "@/lib/account-filters";
+import { accountMatchesFilters, runningTypesForSelection } from "@/lib/account-filters";
 import type { Account, Category, FaceOption, RunningType, School } from "@/lib/types";
 import { formatDate, formatDistance } from "@/lib/utils";
+import { accountPlatformFromPathname, type AccountPlatform } from "@/lib/account-platforms";
 
 function completed(a: Account) {
   const p = a.progress;
@@ -30,7 +32,10 @@ function completed(a: Account) {
 }
 function sportBinding(a: Account) { return a.sport_world_accounts ? (Array.isArray(a.sport_world_accounts) ? a.sport_world_accounts[0] : a.sport_world_accounts) : null; }
 function sportLabel(a: Account) { const s = sportBinding(a); if (!s?.sport_account) return { text: '未绑定', tone: 'text-slate-400 bg-slate-50' }; if (s.last_sync_status === 'need_verify') return { text: '需要验证', tone: 'text-orange-600 bg-orange-50' }; if (s.last_sync_status === 'failed') return { text: '同步失败', tone: 'text-rose-600 bg-rose-50' }; if (s.token_status === 'expired' || s.last_sync_status === 'token_expired') return { text: 'Token失效', tone: 'text-orange-600 bg-orange-50' }; if (s.last_sync_status === 'success') return { text: '已同步', tone: 'text-emerald-600 bg-emerald-50' }; return { text: '已绑定', tone: 'text-brand-600 bg-brand-50' }; }
+function belongsToPlatform(account: Account, platform: AccountPlatform) { return account.category?.name === platform; }
 export default function AccountsPage() {
+  const pathname = usePathname();
+  const platform = accountPlatformFromPathname(pathname);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -38,9 +43,7 @@ export default function AccountsPage() {
   const [faceOptions, setFaceOptions] = useState<FaceOption[]>([]);
   const [search, setSearch] = useState("");
   const [school, setSchool] = useState("");
-  const [category, setCategory] = useState("");
   const [runningType, setRunningType] = useState("");
-  const [faceOption, setFaceOption] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -56,16 +59,21 @@ export default function AccountsPage() {
   const [passwordsLoading, setPasswordsLoading] = useState(false);
   const [includePassword, setIncludePassword] = useState(false);
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const category = categories.find((item) => item.name === platform)?.id || "";
+  useEffect(() => {
+    setSchool("");
+    setRunningType("");
+    setSportBindingFilter("");
+    setSportSyncStatusFilter("");
+  }, [platform]);
   const load = useCallback(async () => {
     setShowPasswords(false);
     setRevealed({});
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (category) params.set("category_id", category);
       if (school) params.set("school_id", school);
       if (runningType) params.set("running_type_id", runningType);
-      if (faceOption) params.set("face_option_id", faceOption);
       const [a, s, c, t, f] = await Promise.all([
         api<{ accounts: Account[] }>(`/api/accounts?${params.toString()}`),
         api<{ schools: School[] }>("/api/schools"),
@@ -83,25 +91,21 @@ export default function AccountsPage() {
     } finally {
       setLoading(false);
     }
-  }, [category, school, runningType, faceOption]);
+  }, [school, runningType]);
   useEffect(() => {
     load();
   }, [load]);
   const availableSchools = useMemo(
-    () => schoolsForCategory(schools, category),
-    [schools, category],
+    () => schools.filter((item) => item.category_id === category || accounts.some((account) => account.school_id === item.id && belongsToPlatform(account, platform))),
+    [schools, accounts, category, platform],
   );
   const availableRunningTypes = useMemo(
     () => runningTypesForSelection(runningTypes, availableSchools, category, school),
     [runningTypes, school, category, availableSchools],
   );
-  const availableFaceOptions = useMemo(
-    () => faceOptionsForSelection(faceOptions, availableRunningTypes, category, school, runningType),
-    [faceOptions, runningType, school, category, availableRunningTypes],
-  );
   const filtered = useMemo(
-    () => accounts.filter((account) => accountMatchesFilters(account, { search, category, school, runningType, faceOption, dateFilter, dateFrom, dateTo, sportBinding: sportBindingFilter, sportSyncStatus: sportSyncStatusFilter })),
-    [accounts, search, category, school, runningType, faceOption, dateFilter, dateFrom, dateTo, sportBindingFilter, sportSyncStatusFilter],
+    () => accounts.filter((account) => belongsToPlatform(account, platform)).filter((account) => accountMatchesFilters(account, { search, category: "", school, runningType, faceOption: "", dateFilter, dateFrom, dateTo, sportBinding: sportBindingFilter, sportSyncStatus: sportSyncStatusFilter })),
+    [accounts, platform, search, school, runningType, dateFilter, dateFrom, dateTo, sportBindingFilter, sportSyncStatusFilter],
   );
   async function remove(a: Account) {
     if (!confirm(`确定删除账号？\n${a.school?.name || "未设置学校"} / ${a.username}`)) return;
@@ -125,7 +129,7 @@ export default function AccountsPage() {
   }
   async function toggleAutoSync(a: Account) {
     const current = sportBinding(a);
-    if (!current) return toast.error('请先绑定运动世界账号');
+    if (!current?.sport_account) return toast.error('请先绑定运动世界账号');
     try { await api(`/api/accounts/${a.id}/sport-world-settings`, { method: 'PATCH', body: JSON.stringify({ sync_enabled: !current.sync_enabled }) }); toast.success(current.sync_enabled ? '已关闭自动同步' : '已开启自动同步'); await load(); }
     catch (e) { toast.error(e instanceof Error ? e.message : '设置失败'); }
   }
@@ -222,8 +226,13 @@ export default function AccountsPage() {
       ...(includePassword ? { 密码: passwords[a.id] || "" } : {}),
       单次公里数: a.distance_per_run,
       下单次数: a.order_count,
+      校区名称: a.campus_name || "",
+      围栏名称: a.fence_name || "",
+      姓名: a.student_name || "",
+      学号: a.student_id || "",
       总公里数: a.distance_per_run * a.order_count,
       下单时间: formatDate(a.order_time),
+      跑步时间: a.running_time || "",
       备注: a.note || "",
       创建时间: formatDate(a.created_at),
     }));
@@ -275,8 +284,8 @@ export default function AccountsPage() {
   return (
     <>
       <PageHeader
-        title="账号管理"
-        description="集中管理学校账号、订单和敏感凭据"
+        title={`${platform}账号`}
+        description={`集中管理${platform}账号、订单和敏感凭据`}
         action={
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-slate-500">
@@ -313,7 +322,7 @@ export default function AccountsPage() {
         }
       />
       <div className="card mb-5 p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(200px,1.5fr)_repeat(7,minmax(0,1fr))]">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="relative min-w-0">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
@@ -327,22 +336,9 @@ export default function AccountsPage() {
           </div>
           <select
             className="input min-w-0"
-            aria-label="账号分类"
-            value={category}
-            onChange={(e) => { setCategory(e.target.value); setSchool(""); setRunningType(""); setFaceOption(""); }}
-          >
-            <option value="">全部分类</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="input min-w-0"
             aria-label="学校"
             value={school}
-            onChange={(e) => { setSchool(e.target.value); setRunningType(""); setFaceOption(""); }}
+            onChange={(e) => { setSchool(e.target.value); setRunningType(""); }}
           >
             <option value="">全部学校</option>
             {availableSchools.map((s) => (
@@ -355,23 +351,10 @@ export default function AccountsPage() {
             className="input min-w-0"
             aria-label="跑步类型"
             value={runningType}
-            onChange={(e) => { setRunningType(e.target.value); setFaceOption(""); }}
+            onChange={(e) => setRunningType(e.target.value)}
           >
             <option value="">全部跑步类型</option>
             {availableRunningTypes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="input min-w-0"
-            aria-label="是否人脸"
-            value={faceOption}
-            onChange={(e) => setFaceOption(e.target.value)}
-          >
-            <option value="">全部人脸类型</option>
-            {availableFaceOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
@@ -389,19 +372,19 @@ export default function AccountsPage() {
             <option value="30d">最近 30 天</option>
             <option value="custom">自定义日期</option>
             </select>
-          <select className="input min-w-0" aria-label="运动世界绑定状态" value={sportBindingFilter} onChange={(e) => setSportBindingFilter(e.target.value)}>
+          {platform === "运动世界" && <select className="input min-w-0" aria-label="运动世界绑定状态" value={sportBindingFilter} onChange={(e) => setSportBindingFilter(e.target.value)}>
             <option value="">全部绑定状态</option>
             <option value="bound">已绑定</option>
             <option value="unbound">未绑定</option>
-          </select>
-          <select className="input min-w-0" aria-label="运动世界同步状态" value={sportSyncStatusFilter} onChange={(e) => setSportSyncStatusFilter(e.target.value)}>
+          </select>}
+          {platform === "运动世界" && <select className="input min-w-0" aria-label="运动世界同步状态" value={sportSyncStatusFilter} onChange={(e) => setSportSyncStatusFilter(e.target.value)}>
             <option value="">全部同步状态</option>
             <option value="never_synced">未同步</option>
             <option value="success">同步成功</option>
             <option value="failed">同步失败</option>
             <option value="token_expired">Token 失效</option>
             <option value="need_verify">需要验证</option>
-          </select>
+          </select>}
         </div>
         {dateFilter === "custom" && (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -415,15 +398,17 @@ export default function AccountsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3">分类 / 学校</th>
+                <th className="px-5 py-3">学校</th>
+                <th className="px-5 py-3">跑步类型</th>
                 <th className="px-5 py-3">账号</th>
+                <th className="px-5 py-3">{platform === "运动世界" ? "校区名称" : platform === "闪动校园" ? "围栏名称" : "姓名 / 学号"}</th>
                 <th className="px-5 py-3">密码</th>
                 <th className="px-5 py-3">单次公里</th>
                 <th className="px-5 py-3">下单次数</th>
                 <th className="px-5 py-3">总公里</th>
                 <th className="px-5 py-3">下单时间</th>
-                <th className="px-5 py-3">运动世界</th>
-                <th className="px-5 py-3">最近同步</th>
+                {platform === "运动世界" && <th className="px-5 py-3">运动世界</th>}
+                {platform === "运动世界" && <th className="px-5 py-3">最近同步</th>}
                 <th className="px-5 py-3">备注</th>
                 <th className="px-5 py-3 text-right">操作</th>
               </tr>
@@ -431,7 +416,7 @@ export default function AccountsPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-16 text-center">
+                  <td colSpan={platform === "运动世界" ? 13 : 11} className="py-16 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-500" />
                   </td>
                 </tr>
@@ -439,11 +424,13 @@ export default function AccountsPage() {
                 filtered.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/70">
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">{a.category?.name || "未分类"}</p>
-                      <p className="mt-1 text-xs text-slate-400">{a.school?.name || "—"}</p>
+                      <p className="font-semibold text-slate-800">{a.school?.name || "—"}</p>
+                      <p className="mt-1 text-xs text-slate-400">{platform}</p>
                       <p className="mt-1 text-[11px] text-brand-600">{a.running_type?.name || "未设跑步类型"} · {a.face_option?.name || "未设人脸选项"}</p>
                     </td>
+                    <td className="px-5 py-4 text-xs text-slate-500">{a.running_type?.name || "—"}</td>
                     <td className="px-5 py-4 font-medium">{a.username}</td>
+                    <td className="px-5 py-4 text-xs text-slate-500">{platform === "运动世界" ? a.campus_name || "—" : platform === "闪动校园" ? a.fence_name || "—" : <>{a.student_name || "—"}<br />{a.student_id || "—"}</>}</td>
                     <td className="px-5 py-4">
                       <button
                         onClick={() => reveal(a)}
@@ -467,23 +454,23 @@ export default function AccountsPage() {
                     <td className="px-5 py-4 text-xs text-slate-500">
                       {formatDate(a.order_time)}
                     </td>
-                    <td className="px-5 py-4">{(() => { const s = sportLabel(a); return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${s.tone}`}>{s.text}</span>; })()}</td>
-                    <td className="px-5 py-4 text-xs text-slate-500">{formatDate(sportBinding(a)?.last_sync_at)}</td>
+                    {platform === "运动世界" && <td className="px-5 py-4">{(() => { const s = sportLabel(a); return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${s.tone}`}>{s.text}</span>; })()}</td>}
+                    {platform === "运动世界" && <td className="px-5 py-4 text-xs text-slate-500">{formatDate(sportBinding(a)?.last_sync_at)}</td>}
                     <td className="max-w-48 px-5 py-4 text-xs text-slate-500" title={a.note || ""}>{a.note || "—"}</td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
-                        <button
+                        {platform === "运动世界" && <button
                           onClick={() => sync(a)}
                           disabled={syncing[a.id]}
                           title="立即同步"
                           className="rounded-md p-2 text-slate-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-50"
                         >
                           <RefreshCw className={`h-4 w-4 ${syncing[a.id] ? "animate-spin" : ""}`} />
-                        </button>
-                        <button onClick={() => reauth(a)} disabled={syncing[a.id] || !sportBinding(a)?.sport_account} title="重新认证" className="rounded-md p-2 text-slate-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40"><KeyRound className="h-4 w-4" /></button>
+                        </button>}
+                        {platform === "运动世界" && <button onClick={() => reauth(a)} disabled={syncing[a.id] || !sportBinding(a)?.sport_account} title="重新认证" className="rounded-md p-2 text-slate-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40"><KeyRound className="h-4 w-4" /></button>}
                         <Link href={`/progress/${a.id}`} title="查看运动记录" className="rounded-md p-2 text-slate-400 hover:bg-brand-50 hover:text-brand-600"><List className="h-4 w-4" /></Link>
-                        <button onClick={() => unbind(a)} disabled={!sportBinding(a)?.sport_account} title="解除绑定" className="rounded-md p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"><Link2Off className="h-4 w-4" /></button>
-                        <button onClick={() => toggleAutoSync(a)} title={sportBinding(a)?.sync_enabled ? "关闭自动同步" : "开启自动同步"} className={`rounded-md px-2 text-xs ${sportBinding(a)?.sync_enabled ? "text-emerald-600" : "text-slate-400"}`}>{sportBinding(a)?.sync_enabled ? "自动" : "手动"}</button>
+                        {platform === "运动世界" && <button onClick={() => unbind(a)} disabled={!sportBinding(a)?.sport_account} title="解除绑定" className="rounded-md p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"><Link2Off className="h-4 w-4" /></button>}
+                        {platform === "运动世界" && <button onClick={() => toggleAutoSync(a)} title={sportBinding(a)?.sync_enabled ? "关闭自动同步" : "开启自动同步"} className={`rounded-md px-2 text-xs ${sportBinding(a)?.sync_enabled ? "text-emerald-600" : "text-slate-400"}`}>{sportBinding(a)?.sync_enabled ? "自动" : "手动"}</button>}
                         <button
                           onClick={() => setModal({ open: true, account: a })}
                           className="rounded-md p-2 text-slate-400 hover:bg-brand-50 hover:text-brand-600"
@@ -503,7 +490,7 @@ export default function AccountsPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={platform === "运动世界" ? 13 : 11}
                     className="py-16 text-center text-sm text-slate-400"
                   >
                     暂无账号，点击“添加账号”开始
@@ -532,11 +519,13 @@ export default function AccountsPage() {
                     <p className="mt-1 text-xs text-slate-400">
                       {a.category?.name || "未分类"}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">跑步类型：{a.running_type?.name || "—"}</p>
+                    <p className="mt-1 text-xs text-slate-500">{platform === "运动世界" ? a.campus_name || "未设校区" : platform === "闪动校园" ? a.fence_name || "未设围栏" : `${a.student_name || "未设姓名"} · ${a.student_id || "未设学号"}`}</p>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => reauth(a)} disabled={syncing[a.id] || !sportBinding(a)?.sport_account} title="重新认证" className="rounded-md p-2 text-slate-400 disabled:opacity-40"><KeyRound className="h-4 w-4" /></button>
+                    {platform === "运动世界" && <button onClick={() => reauth(a)} disabled={syncing[a.id] || !sportBinding(a)?.sport_account} title="重新认证" className="rounded-md p-2 text-slate-400 disabled:opacity-40"><KeyRound className="h-4 w-4" /></button>}
                     <Link href={`/progress/${a.id}`} title="查看运动记录" className="rounded-md p-2 text-slate-400"><List className="h-4 w-4" /></Link>
-                    <button onClick={() => unbind(a)} disabled={!sportBinding(a)?.sport_account} title="解除绑定" className="rounded-md p-2 text-rose-500 disabled:opacity-40"><Link2Off className="h-4 w-4" /></button>
+                    {platform === "运动世界" && <button onClick={() => unbind(a)} disabled={!sportBinding(a)?.sport_account} title="解除绑定" className="rounded-md p-2 text-rose-500 disabled:opacity-40"><Link2Off className="h-4 w-4" /></button>}
                     <button
                       onClick={() => setModal({ open: true, account: a })}
                       className="rounded-md p-2 text-slate-400"
@@ -569,8 +558,8 @@ export default function AccountsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-xs"><span className={`rounded-full px-2 py-1 font-semibold ${sportLabel(a).tone}`}>{sportLabel(a).text}</span><span className="text-slate-400">最近同步 {formatDate(sportBinding(a)?.last_sync_at)}</span></div>
-                <button onClick={() => sync(a)} disabled={syncing[a.id]} className="btn-secondary w-full py-1.5 text-xs"><RefreshCw className={`h-3.5 w-3.5 ${syncing[a.id] ? "animate-spin" : ""}`} />{syncing[a.id] ? "正在同步..." : "立即同步"}</button>
+                {platform === "运动世界" && <div className="flex items-center justify-between text-xs"><span className={`rounded-full px-2 py-1 font-semibold ${sportLabel(a).tone}`}>{sportLabel(a).text}</span><span className="text-slate-400">最近同步 {formatDate(sportBinding(a)?.last_sync_at)}</span></div>}
+                 {platform === "运动世界" && <button onClick={() => sync(a)} disabled={syncing[a.id]} className="btn-secondary w-full py-1.5 text-xs"><RefreshCw className={`h-3.5 w-3.5 ${syncing[a.id] ? "animate-spin" : ""}`} />{syncing[a.id] ? "正在同步..." : "立即同步"}</button>}
                 <button
                   onClick={() => reveal(a)}
                   className="text-xs font-semibold text-brand-600"
@@ -593,6 +582,7 @@ export default function AccountsPage() {
       {modal.open && (
         <AccountModal
           account={modal.account}
+          platform={platform}
           schools={schools}
           categories={categories}
           runningTypes={runningTypes}
