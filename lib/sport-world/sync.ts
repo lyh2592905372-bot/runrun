@@ -1,4 +1,5 @@
 import { decryptSportSecret, encryptSportSecret } from '@/lib/encryption';
+import { refreshOrderProgressAfterSync } from '@/lib/order-progress-server';
 import { SportWorldClient, SportWorldError, type SportWorldProgress, type SportWorldRun, type SportWorldSession } from './client';
 
 export type SyncResult = { recordsReceived: number; recordsCreated: number; recordsUpdated: number; completedRuns: number; completedDistance: number; authMethod: 'existing_token' | 'password_login' };
@@ -83,6 +84,7 @@ export async function syncSportWorldAccount(supabase: any, accountId: string): P
     const completedRuns = progress.completedRuns ?? rows.length;
     const completedDistance = round(progress.completedDistance ?? rows.reduce((sum: number, row: any) => sum + Number(row.distance || 0), 0));
     const latest = rows.slice().sort((a: any, b: any) => String(b.start_time || '').localeCompare(String(a.start_time || '')))[0];
+    await refreshOrderProgressAfterSync(supabase, accountId);
     await supabase.from('sport_world_accounts').update({ last_sync_at: now, last_sync_status: 'success', token_status: 'valid', last_sync_error: null, sync_started_at: null, current_semester: progress.semester || null, semester_started_at: progress.startsAt || null, semester_ended_at: progress.endsAt || null, completion_status: progress.status || null, target_runs: progress.targetRuns ?? null, target_distance: progress.targetDistance ?? null, completed_runs: completedRuns, completed_distance: completedDistance, latest_run_at: latest?.start_time || null, latest_run_distance: latest?.distance || null }).eq('account_record_id', accountId);
     await supabase.from('sport_world_sync_logs').insert({ account_record_id: accountId, started_at: startedAt, finished_at: new Date().toISOString(), status: 'success', auth_method: authMethod, records_received: recordsReceived, records_created: recordsCreated, records_updated: recordsUpdated, completed_runs: completedRuns, completed_distance: completedDistance });
     return { recordsReceived, recordsCreated, recordsUpdated, completedRuns, completedDistance, authMethod };
