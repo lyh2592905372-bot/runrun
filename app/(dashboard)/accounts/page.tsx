@@ -24,7 +24,7 @@ import { api } from "@/lib/api";
 import { accountMatchesFilters, runningTypesForSelection } from "@/lib/account-filters";
 import type { Account, Category, FaceOption, RunningType, School } from "@/lib/types";
 import { formatDate, formatDistance } from "@/lib/utils";
-import { accountPlatformFromPathname, type AccountPlatform } from "@/lib/account-platforms";
+import { accountPlatformFromPathname, belongsToPlatform } from "@/lib/account-platforms";
 
 function completed(a: Account) {
   const p = a.progress;
@@ -32,7 +32,6 @@ function completed(a: Account) {
 }
 function sportBinding(a: Account) { return a.sport_world_accounts ? (Array.isArray(a.sport_world_accounts) ? a.sport_world_accounts[0] : a.sport_world_accounts) : null; }
 function sportLabel(a: Account) { const s = sportBinding(a); if (!s?.sport_account) return { text: '未绑定', tone: 'text-slate-400 bg-slate-50' }; if (s.last_sync_status === 'need_verify') return { text: '需要验证', tone: 'text-orange-600 bg-orange-50' }; if (s.last_sync_status === 'failed') return { text: '同步失败', tone: 'text-rose-600 bg-rose-50' }; if (s.token_status === 'expired' || s.last_sync_status === 'token_expired') return { text: 'Token失效', tone: 'text-orange-600 bg-orange-50' }; if (s.last_sync_status === 'success') return { text: '已同步', tone: 'text-emerald-600 bg-emerald-50' }; return { text: '已绑定', tone: 'text-brand-600 bg-brand-50' }; }
-function belongsToPlatform(account: Account, platform: AccountPlatform) { return account.category?.name === platform; }
 export default function AccountsPage() {
   const pathname = usePathname();
   const platform = accountPlatformFromPathname(pathname);

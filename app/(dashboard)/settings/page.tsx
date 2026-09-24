@@ -120,15 +120,6 @@ export default function SettingsPage() {
         {runningTypes.map((type) => <Row key={type.id} name={type.name} editing={edit?.id === type.id} editValue={edit?.name || ''} onEdit={() => setEdit({ type: 'running_type', id: type.id, name: type.name })} onEditChange={(name) => setEdit((current) => current ? { ...current, name } : current)} onSave={saveEdit} onCancel={() => setEdit(null)} onDelete={() => setPendingDelete({ type: 'running_type', id: type.id, name: type.name })} />)}
       </SettingCard>
     </div>
-    <div className="card mt-6 p-5">
-      <h2 className="font-semibold">安全与权限</h2>
-      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-700">✓ Supabase Auth 管理登录</div>
-        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-700">✓ 普通顾客可自助注册</div>
-        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-700">✓ 密码 AES-256-GCM 加密</div>
-        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-700">✓ 查看密码写入审计日志</div>
-      </div>
-    </div>
     {pendingDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" role="dialog" aria-modal="true" aria-labelledby={deleteTitleId}>
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
         <div className="flex items-start gap-3">

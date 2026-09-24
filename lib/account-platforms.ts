@@ -1,3 +1,5 @@
+import type { Account } from './types';
+
 export const ACCOUNT_PLATFORMS = [
   { slug: 'sport-world', name: '运动世界' },
   { slug: 'flash-campus', name: '闪动校园' },
@@ -5,6 +7,8 @@ export const ACCOUNT_PLATFORMS = [
 ] as const;
 
 export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]['name'];
+
+export function belongsToPlatform(account: Account, platform: AccountPlatform) { return account.category?.name === platform; }
 
 export function accountPlatformFromPathname(pathname: string): AccountPlatform {
   return ACCOUNT_PLATFORMS.find((platform) => pathname === `/accounts/${platform.slug}`)?.name || '运动世界';

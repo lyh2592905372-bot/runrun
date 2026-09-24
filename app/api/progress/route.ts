@@ -6,7 +6,7 @@ import { readProgressRecords } from '@/lib/order-progress-server';
 export async function GET() {
   const { supabase, response } = await requireUser();
   if (response) return response;
-  const { data, error } = await supabase.from('accounts').select('id,username,school:schools(*),distance_per_run,order_count,order_time,progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)').is('deleted_at', null).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('accounts').select('id,username,campus_name,student_name,student_id,category:account_categories(*),school:schools(*),distance_per_run,order_count,order_time,progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)').is('deleted_at', null).order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   try {
     const records = await readProgressRecords(supabase, (data || []).map((account) => account.id));
