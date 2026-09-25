@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server-auth';
 
 export async function GET() {
-  const { supabase, response } = await requireUser(); if (response) return response;
+  const { supabase, user, role, response } = await requireUser(); if (response || !user) return response!;
+  let accountsQuery = supabase.from('accounts').select('order_count,distance_per_run,progress(completed_runs)').is('deleted_at', null);
+  if (role !== 'admin') accountsQuery = accountsQuery.eq('user_id', user.id);
   const [{ data: accounts, error }, { count: schools }] = await Promise.all([
-    supabase.from('accounts').select('order_count,distance_per_run,progress(completed_runs)').is('deleted_at', null),
+    accountsQuery,
     supabase.from('schools').select('id', { count: 'exact', head: true })
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

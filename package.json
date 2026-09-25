@@ -9,10 +9,15 @@
     "uuid": "^11.1.1"
   },
   "scripts": {
+    "deploy": "bash deploy.sh",
+    "rollback": "bash rollback.sh",
     "dev": "next dev",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:permissions": "node deploy/test-user-isolation-db.mjs && node deploy/test-user-isolation-api.mjs",
+    "test:permissions:browser": "node deploy/test-user-isolation-browser.mjs",
+    "test:business": "node deploy/test-account-hierarchy.mjs && node deploy/test-account-filters.mjs && node deploy/test-global-configuration.mjs && node deploy/test-order-progress.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -29,6 +34,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

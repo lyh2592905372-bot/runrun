@@ -9,7 +9,7 @@ function round(value: number) { return Math.round(value * 100) / 100; }
 function friendlyCode(error: unknown) { return error instanceof SportWorldError ? error.code : 'UNKNOWN_ERROR'; }
 
 export async function syncSportWorldAccount(supabase: any, accountId: string): Promise<SyncResult> {
-  const { data: account, error: accountError } = await supabase.from('accounts').select('id,username,order_count,distance_per_run,sport_world_accounts(*)').eq('id', accountId).is('deleted_at', null).single();
+  const { data: account, error: accountError } = await supabase.from('accounts').select('id,user_id,username,order_count,distance_per_run,sport_world_accounts(*)').eq('id', accountId).is('deleted_at', null).single();
   if (accountError || !account) throw new SportWorldError('UNKNOWN_ERROR', '账号不存在');
   const sport = relation(account.sport_world_accounts);
   if (!sport?.sport_account || !sport.sport_password_encrypted) throw new SportWorldError('AUTH_FAILED', '请先绑定运动世界账号');
@@ -73,7 +73,7 @@ export async function syncSportWorldAccount(supabase: any, accountId: string): P
     const { progress, records } = remote;
     let recordsCreated = 0; let recordsUpdated = 0;
     for (const run of records) {
-      const row = { account_record_id: accountId, sport_world_record_id: run.id, run_date: run.runDate || (run.startTime ? run.startTime.slice(0, 10) : null), start_time: run.startTime || null, end_time: run.endTime || null, distance: round(run.distance), duration: run.duration || null, pace: run.pace || null, status: run.status || null, is_valid: run.isValid, sport_type: run.sportType || null, semester: run.semester || progress.semester || null, raw_status: run.rawStatus || run.status || null, source: 'sport_world', synced_at: now };
+      const row = { account_record_id: accountId, user_id: account.user_id, sport_world_record_id: run.id, run_date: run.runDate || (run.startTime ? run.startTime.slice(0, 10) : null), start_time: run.startTime || null, end_time: run.endTime || null, distance: round(run.distance), duration: run.duration || null, pace: run.pace || null, status: run.status || null, is_valid: run.isValid, sport_type: run.sportType || null, semester: run.semester || progress.semester || null, raw_status: run.rawStatus || run.status || null, source: 'sport_world', synced_at: now };
       const { data: existing } = await supabase.from('sport_world_run_records').select('id').eq('account_record_id', accountId).eq('sport_world_record_id', run.id).maybeSingle();
       const { error } = await supabase.from('sport_world_run_records').upsert(row, { onConflict: 'account_record_id,sport_world_record_id' });
       if (error) throw new SportWorldError('API_ERROR', '跑步记录保存失败', error);
@@ -86,14 +86,14 @@ export async function syncSportWorldAccount(supabase: any, accountId: string): P
     const latest = rows.slice().sort((a: any, b: any) => String(b.start_time || '').localeCompare(String(a.start_time || '')))[0];
     await refreshOrderProgressAfterSync(supabase, accountId);
     await supabase.from('sport_world_accounts').update({ last_sync_at: now, last_sync_status: 'success', token_status: 'valid', last_sync_error: null, sync_started_at: null, current_semester: progress.semester || null, semester_started_at: progress.startsAt || null, semester_ended_at: progress.endsAt || null, completion_status: progress.status || null, target_runs: progress.targetRuns ?? null, target_distance: progress.targetDistance ?? null, completed_runs: completedRuns, completed_distance: completedDistance, latest_run_at: latest?.start_time || null, latest_run_distance: latest?.distance || null }).eq('account_record_id', accountId);
-    await supabase.from('sport_world_sync_logs').insert({ account_record_id: accountId, started_at: startedAt, finished_at: new Date().toISOString(), status: 'success', auth_method: authMethod, records_received: recordsReceived, records_created: recordsCreated, records_updated: recordsUpdated, completed_runs: completedRuns, completed_distance: completedDistance });
+    await supabase.from('sport_world_sync_logs').insert({ account_record_id: accountId, user_id: account.user_id, started_at: startedAt, finished_at: new Date().toISOString(), status: 'success', auth_method: authMethod, records_received: recordsReceived, records_created: recordsCreated, records_updated: recordsUpdated, completed_runs: completedRuns, completed_distance: completedDistance });
     return { recordsReceived, recordsCreated, recordsUpdated, completedRuns, completedDistance, authMethod };
   } catch (error) {
     const code = friendlyCode(error);
     const status = code === 'VERIFY_REQUIRED' ? 'need_verify' : code === 'TOKEN_EXPIRED' ? 'token_expired' : 'failed';
     const message = error instanceof Error ? error.message : '同步失败';
     await supabase.from('sport_world_accounts').update({ last_sync_status: status, token_status: code === 'VERIFY_REQUIRED' ? 'need_verify' : code === 'TOKEN_EXPIRED' ? 'expired' : sport.token_status, last_sync_error: message.slice(0, 500), sync_started_at: null }).eq('account_record_id', accountId);
-    await supabase.from('sport_world_sync_logs').insert({ account_record_id: accountId, started_at: startedAt, finished_at: new Date().toISOString(), status, auth_method: authMethod, records_received: recordsReceived, error_code: code, error_message: message.slice(0, 500) });
+    await supabase.from('sport_world_sync_logs').insert({ account_record_id: accountId, user_id: account.user_id, started_at: startedAt, finished_at: new Date().toISOString(), status, auth_method: authMethod, records_received: recordsReceived, error_code: code, error_message: message.slice(0, 500) });
     throw error;
   }
 }

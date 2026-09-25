@@ -4,12 +4,14 @@ import { calculateProgressFromOrderTime, type ProgressRun } from '@/lib/order-pr
 import { readProgressRecords } from '@/lib/order-progress-server';
 
 export async function GET() {
-  const { supabase, response } = await requireUser();
-  if (response) return response;
-  const { data, error } = await supabase.from('accounts').select('id,username,campus_name,student_name,student_id,category:account_categories(*),school:schools(*),distance_per_run,order_count,order_time,progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)').is('deleted_at', null).order('created_at', { ascending: false });
+  const { supabase, user, role, response } = await requireUser();
+  if (response || !user) return response!;
+  let accountsQuery = supabase.from('accounts').select('id,username,campus_name,student_name,student_id,category:account_categories(*),school:schools(*),distance_per_run,order_count,order_time,progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)');
+  if (role !== 'admin') accountsQuery = accountsQuery.eq('user_id', user.id);
+  const { data, error } = await accountsQuery.is('deleted_at', null).order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   try {
-    const records = await readProgressRecords(supabase, (data || []).map((account) => account.id));
+    const records = await readProgressRecords(supabase, (data || []).map((account) => account.id), role === 'admin' ? undefined : user.id);
     const byAccount = new Map<string, ProgressRun[]>();
     for (const record of records) {
       const rows = byAccount.get(record.account_record_id) || [];
@@ -32,13 +34,17 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { supabase, user, response } = await requireUser();
+  const { supabase, user, role, response } = await requireUser();
   if (response || !user) return response!;
   const { account_id, completed_runs } = await request.json();
-  const { data: account } = await supabase.from('accounts').select('order_count,order_time,username').eq('id', account_id).single();
-  if (!account || !Number.isInteger(completed_runs) || completed_runs < 0 || completed_runs > account.order_count) return NextResponse.json({ error: `已跑次数必须在 0-${account?.order_count || 0} 之间` }, { status: 400 });
+  let accountQuery = supabase.from('accounts').select('user_id,order_count,order_time,username').eq('id', account_id);
+  if (role !== 'admin') accountQuery = accountQuery.eq('user_id', user.id);
+  const { data: account } = await accountQuery.is('deleted_at', null).single();
+  if (!account) return NextResponse.json({ error: '账号不存在' }, { status: 404 });
+  if (!Number.isInteger(completed_runs) || completed_runs < 0 || completed_runs > account.order_count) return NextResponse.json({ error: `已跑次数必须在 0-${account?.order_count || 0} 之间` }, { status: 400 });
   const { error } = await supabase.from('progress').upsert({
     account_id,
+    user_id: account.user_id,
     manual_override: true,
     manual_override_count: completed_runs,
     manual_override_order_time: account.order_time,

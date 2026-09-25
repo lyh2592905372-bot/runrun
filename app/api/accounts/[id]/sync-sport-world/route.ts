@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server-auth';
+import { requireAccount } from '@/lib/server-auth';
 import { syncErrorResponse, syncSportWorldAccount } from '@/lib/sport-world/sync';
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const { supabase, user, response } = await requireUser();
+  const { supabase, user, response } = await requireAccount(id);
   if (response || !user) return response!;
   try {
     const result = await syncSportWorldAccount(supabase, id);

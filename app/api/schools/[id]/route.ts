@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { configurationError, findConfigurationByName } from '@/lib/configuration-crud';
-import { requireUser } from '@/lib/server-auth';
+import { requireAdmin } from '@/lib/server-auth';
 
 const schema = z.object({ name: z.string().trim().min(1).max(120) });
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const { supabase, response } = await requireUser();
+  const { supabase, response } = await requireAdmin();
   if (response) return response;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: '请填写学校名称' }, { status: 400 });
@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const { supabase, response } = await requireUser();
+  const { supabase, response } = await requireAdmin();
   if (response) return response;
   const { error } = await supabase.from('schools').delete().eq('id', id);
   if (error) {

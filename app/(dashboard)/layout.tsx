@@ -1,9 +1,9 @@
 import { DashboardShell } from '@/components/layout/dashboard-shell';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/server-auth';
+import { redirect } from 'next/navigation';
 
 export default async function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = user ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle() : { data: null };
-  return <DashboardShell user={{ email: user?.email || '用户', role: profile?.role || 'customer' }}>{children}</DashboardShell>;
+  const { user, role, response } = await requireUser();
+  if (response || !user || !role) redirect('/login');
+  return <DashboardShell user={{ email: user.email || '用户', role }}>{children}</DashboardShell>;
 }

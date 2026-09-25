@@ -16,14 +16,14 @@ function accountSaveError(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const { supabase, response } = await requireUser();
-  if (response) return response;
+  const { supabase, user, role, response } = await requireUser();
+  if (response || !user) return response!;
   const queryParams = request.nextUrl.searchParams;
   let query = supabase
     .from('accounts')
-    .select('id,school_id,category_id,running_type_id,face_option_id,username,distance_per_run,order_count,order_time,running_time,campus_name,fence_name,student_name,student_id,note,created_at,updated_at,deleted_at,school:schools(*),category:account_categories(*),running_type:running_types(*),face_option:face_options(*),progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,sport_unid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)')
-    .is('deleted_at', null)
+    .select('id,school_id,category_id,running_type_id,face_option_id,username,distance_per_run,order_count,order_time,running_time,campus_name,fence_name,student_name,student_id,note,created_at,updated_at,deleted_at,school:schools(*),category:account_categories(*),running_type:running_types(*),face_option:face_options(*),progress(*),sport_world_accounts(id,account_record_id,sport_account,sport_password_encrypted,sport_uid,sport_unid,token_status,sync_enabled,last_sync_at,last_sync_status,last_sync_error,current_semester,semester_started_at,semester_ended_at,completion_status,target_runs,target_distance,completed_runs,completed_distance,latest_run_at,latest_run_distance,manual_run_adjustment,manual_distance_adjustment,sync_started_at)').is('deleted_at', null)
     .order('created_at', { ascending: false });
+  if (role !== 'admin') query = query.eq('user_id', user.id);
   if (queryParams.get('search')) query = query.or(`username.ilike.%${queryParams.get('search')}%,note.ilike.%${queryParams.get('search')}%`);
   if (queryParams.get('school_id')) query = query.eq('school_id', queryParams.get('school_id'));
   if (queryParams.get('category_id')) query = query.eq('category_id', queryParams.get('category_id'));
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const { supabase, user, response } = await requireUser();
-  if (response) return response;
+  if (response || !user) return response!;
   if (!user) return NextResponse.json({ error: '请先登录' }, { status: 401 });
   const input = await request.json();
   if (input.order_time === undefined || input.order_time === '') input.order_time = new Date().toISOString();
@@ -76,13 +76,14 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('accounts')
-      .insert({ ...values, encrypted_password: password ? encryptSecret(password) : null })
+      .insert({ ...values, user_id: user.id, encrypted_password: password ? encryptSecret(password) : null })
       .select('id')
       .single();
     if (error) throw error;
-    await supabase.from('progress').insert({ account_id: data.id, completed_runs: 0 });
+    const { error: progressError } = await supabase.from('progress').insert({ account_id: data.id, user_id: user.id, completed_runs: 0 });
+    if (progressError) throw progressError;
     if (loginAccount || loginPassword) {
-      const { error: sportError } = await supabase.from('sport_world_accounts').insert({ account_record_id: data.id, sport_account: loginAccount, sport_password_encrypted: encryptedSportPassword, token_status: 'unknown', last_sync_status: 'never_synced' });
+      const { error: sportError } = await supabase.from('sport_world_accounts').insert({ account_record_id: data.id, user_id: user.id, sport_account: loginAccount, sport_password_encrypted: encryptedSportPassword, token_status: 'unknown', last_sync_status: 'never_synced' });
       if (sportError) throw sportError;
     }
     await supabase.from('operation_logs').insert({ user_id: user.id, action_type: loginAccount ? 'add_sport_world_binding' : 'create_account', target_type: 'account', target_id: data.id, description: loginAccount ? `新增账号并绑定运动世界账号 ${values.username}` : `新增账号 ${values.username}` });

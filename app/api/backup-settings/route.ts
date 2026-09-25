@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/server-auth';
+import { requireAdmin } from '@/lib/server-auth';
 
 const schema = z.object({
   auto_enabled: z.boolean(),
@@ -9,7 +9,7 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const { supabase, response } = await requireUser();
+  const { supabase, response } = await requireAdmin();
   if (response) return response;
   const { data, error } = await supabase.from('backup_settings').select('*').eq('id', true).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -17,7 +17,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { supabase, user, response } = await requireUser();
+  const { supabase, user, response } = await requireAdmin();
   if (response || !user) return response!;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: '备份设置参数无效' }, { status: 400 });

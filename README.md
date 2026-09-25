@@ -25,9 +25,11 @@ npm run dev
 ## Supabase 初始化
 
 1. 创建 Supabase 项目，在 SQL Editor 中完整运行 `supabase/schema.sql`。
-2. 在 Storage 创建私有 bucket `backups`，并按 SQL 文件末尾注释增加仅允许用户访问自己文件夹的 Storage policy。
+2. SQL 已创建私有 bucket `backups`，新版 Storage policy 仅允许管理员访问备份。
 3. 在 Authentication → URL Configuration 中将 Site URL 设置为生产域名，并保留生产与本地开发 Redirect URLs。
-4. 在 Authentication → Users 中创建管理员账号。
+4. 在 Authentication → Users 中创建账号，再由数据库所有者按 `docs/user-isolation.md` 精确设置其 profile 为管理员；注册元数据不能授予管理员权限。
+
+用户隔离、独立管理员后台、现有数据迁移与权限验证见 [用户隔离发布说明](docs/user-isolation.md)。已有环境执行 `supabase/migrations/20260924010000_user_isolation.sql`，不必重建数据库。
 
 RLS 已覆盖所有业务表；密码使用服务端 AES-256-GCM 加密后写入 `encrypted_password`，查看密码会写入 `operation_logs`，日志不会保存明文密码。
 

@@ -1,2 +1,7 @@
 import { redirect } from 'next/navigation';
-export default function Home() { redirect('/dashboard'); }
+import { requireUser } from '@/lib/server-auth';
+export default async function Home() {
+  const { role, response } = await requireUser();
+  if (response) redirect('/login');
+  redirect(role === 'admin' ? '/admin' : '/accounts');
+}

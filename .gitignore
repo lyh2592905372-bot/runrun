@@ -4,3 +4,7 @@ node_modules
 !.env.example
 out
 *.log
+test-results/
+.deploy.config
+.deploy-local.lock/
+deploy-package.tar.gz

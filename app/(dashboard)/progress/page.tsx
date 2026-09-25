@@ -31,7 +31,7 @@ export default function ProgressPage() {
   useEffect(() => { load(); }, []);
   async function save(account: Account) { const value = drafts[account.id] ?? completed(account); try { const result = await api<{ completed: boolean }>('/api/progress', { method: 'PATCH', body: JSON.stringify({ account_id: account.id, completed_runs: value }) }); toast.success(result.completed ? '任务完成！' : '进度已更新'); await load(); } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); } }
   async function sync(account: Account) { if (syncing[account.id]) return; setSyncing((current) => ({ ...current, [account.id]: true })); try { await api(`/api/accounts/${account.id}/sync-sport-world`, { method: 'POST' }); const updated = (await load())?.find((item) => item.id === account.id)?.order_progress; if (updated) toast.success(`同步成功 · ${updated.finalCompletedCount} 次 · ${updated.completedDistance.toFixed(2)} km`); } catch (error) { toast.error(error instanceof Error ? error.message : '同步失败'); } finally { setSyncing((current) => ({ ...current, [account.id]: false })); } }
-  return <><PageHeader title="进度管理" description="运动世界自动同步进度，可保留人工修正" />
+  return <><PageHeader title="进度管理" description="自动同步进度，可保留人工修正" />
     <div className="card mb-5 p-4">
       <div className="relative min-w-0">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

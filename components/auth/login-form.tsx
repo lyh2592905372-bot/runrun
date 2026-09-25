@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { Eye, EyeOff, Loader2, LockKeyhole, Mail, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/browser';
+import { api } from '@/lib/api';
 
 export function LoginForm() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -19,17 +20,21 @@ export function LoginForm() {
     if (mode === 'register' && password !== confirmPassword) return toast.error('两次输入的密码不一致');
     setLoading(true);
     const supabase = createClient();
+    try {
     if (mode === 'register') {
       const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`, data: { role: 'customer' } } });
       if (error) toast.error(error.message);
-      else if (data.session) { toast.success('注册成功，已作为普通顾客登录'); window.location.assign('/dashboard'); }
+      else if (data.session) { const { home } = await api<{ home: string }>('/api/auth/me'); toast.success('注册成功，已作为普通顾客登录'); window.location.assign(home); }
       else { toast.success('注册成功，请查收验证邮件后登录'); setMode('login'); setConfirmPassword(''); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) toast.error(error.message);
-      else { await fetch('/api/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action_type: 'login', target_type: 'session', description: '用户登录' }) }).catch(() => undefined); toast.success('登录成功'); window.location.assign('/dashboard'); }
+      else { const { home } = await api<{ home: string }>('/api/auth/me'); await fetch('/api/logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action_type: 'login', target_type: 'session', description: '用户登录' }) }).catch(() => undefined); toast.success('登录成功'); window.location.assign(home); }
     }
-    setLoading(false);
+    } catch (error) {
+      await supabase.auth.signOut();
+      toast.error(error instanceof Error ? error.message : '登录失败，请重试');
+    } finally { setLoading(false); }
   }
 
   async function forgot() { if (!email) return toast.error('请先填写邮箱'); const { error } = await createClient().auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` }); if (error) toast.error(error.message); else toast.success('重置链接已发送'); }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { encryptSecret, encryptSportSecret } from '@/lib/encryption';
-import { requireUser } from '@/lib/server-auth';
+import { requireAccount } from '@/lib/server-auth';
 import { validateAccountHierarchy } from '@/lib/account-hierarchy';
 import { accountFieldsFromInput, accountInputSchema } from '@/lib/account-input';
 import { ConfigurationResolutionError, resolveAccountConfiguration } from '@/lib/configuration-resolution';
@@ -17,14 +17,16 @@ function accountSaveError(error: unknown) {
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const { supabase, user, response } = await requireUser();
+  const { supabase, user, role, response } = await requireAccount(id);
   if (response) return response;
   if (!user) return NextResponse.json({ error: '请先登录' }, { status: 401 });
   const body = accountInputSchema.safeParse(await request.json());
   if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message || '参数错误' }, { status: 400 });
 
   try {
-    const { data: existingAccount, error: existingAccountError } = await supabase.from('accounts').select('id,username,encrypted_password,school_id,running_type_id,face_option_id,order_time,running_time').eq('id', id).single();
+    let existingAccountQuery = supabase.from('accounts').select('id,user_id,username,encrypted_password,school_id,running_type_id,face_option_id,order_time,running_time').eq('id', id);
+    if (role !== 'admin') existingAccountQuery = existingAccountQuery.eq('user_id', user.id);
+    const { data: existingAccount, error: existingAccountError } = await existingAccountQuery.single();
     if (existingAccountError || !existingAccount) return NextResponse.json({ error: '账号不存在' }, { status: 404 });
     const configuration = await resolveAccountConfiguration(supabase, body.data);
     if (body.data.running_type === null && existingAccount.school_id === configuration.school_id) {
@@ -65,10 +67,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (existingAccount.order_time && new Date(existingAccount.order_time).getTime() === new Date(body.data.order_time).getTime()) delete update.order_time;
     if (body.data.running_time === undefined || existingAccount.running_time === body.data.running_time) delete update.running_time;
     if (password) update.encrypted_password = encryptSecret(password);
-    const { error } = await supabase.from('accounts').update(update).eq('id', id);
+    let updateQuery = supabase.from('accounts').update(update).eq('id', id);
+    if (role !== 'admin') updateQuery = updateQuery.eq('user_id', user.id);
+    const { error } = await updateQuery;
     if (error) throw error;
     if (shouldSaveSportCredentials) {
-      const sportUpdate: Record<string, unknown> = { account_record_id: id, sport_account: loginAccount };
+      const sportUpdate: Record<string, unknown> = { account_record_id: id, user_id: existingAccount.user_id, sport_account: loginAccount };
       if (loginPassword) sportUpdate.sport_password_encrypted = encryptSportSecret(loginPassword);
       if (isSportWorld && (loginAccount !== existingSport?.sport_account || Boolean(loginPassword))) {
         Object.assign(sportUpdate, { sport_token_encrypted: null, sport_uid: null, sport_unid: null, token_status: 'unknown' });
@@ -85,10 +89,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const { supabase, user, response } = await requireUser();
+  const { supabase, user, role, response } = await requireAccount(id);
   if (response) return response;
   if (!user) return NextResponse.json({ error: '请先登录' }, { status: 401 });
-  const { error } = await supabase.from('accounts').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  let deleteQuery = supabase.from('accounts').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  if (role !== 'admin') deleteQuery = deleteQuery.eq('user_id', user.id);
+  const { error } = await deleteQuery;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await supabase.from('operation_logs').insert({ user_id: user.id, action_type: 'delete_account', target_type: 'account', target_id: id, description: '删除账号（软删除）' });
   return NextResponse.json({ ok: true });

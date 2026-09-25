@@ -26,9 +26,9 @@ function loadTs(file, mocks = {}) {
 
 const { calculateProgressCount, calculateProgressFromOrderTime, progressWithDraft } = loadTs('lib/order-progress.ts');
 const { refreshOrderProgressAfterSync, readProgressRecords } = loadTs('lib/order-progress-server.ts');
-const account = { id: 'a', username: 'fixture', order_time: '2026-09-04T20:34:00+08:00', order_count: 40, distance_per_run: 2.5 };
+const account = { id: 'a', user_id: 'user', username: 'fixture', order_time: '2026-09-04T20:34:00+08:00', order_count: 40, distance_per_run: 2.5 };
 const run = (id, time = '2026-09-05T08:00:00+08:00', extra = {}) => ({
-  account_record_id: account.id, sport_world_record_id: String(id), start_time: time, is_valid: true, ...extra,
+  account_record_id: account.id, user_id: account.user_id, sport_world_record_id: String(id), start_time: time, is_valid: true, ...extra,
 });
 const runs = (count) => Array.from({ length: count }, (_, i) => run(i));
 const manual = (count) => ({ manual_override: true, manual_override_count: count, manual_override_order_time: account.order_time });
@@ -112,7 +112,7 @@ await check('7 repeated sync and duplicate record IDs never accumulate', async (
 
 function progressRoute(db, signedIn = true) {
   return loadTs('app/api/progress/route.ts', {
-    '@/lib/server-auth': { requireUser: async () => ({ supabase: db, user: signedIn ? { id: 'user' } : null, response: signedIn ? null : Response.json({ error: '未登录' }, { status: 401 }) }) },
+    '@/lib/server-auth': { requireUser: async () => ({ supabase: db, role: 'user', user: signedIn ? { id: 'user' } : null, response: signedIn ? null : Response.json({ error: '未登录' }, { status: 401 }) }) },
   });
 }
 await check('8 save and reload use persisted override, not old counters; invalid input rejected', async () => {

@@ -2,6 +2,10 @@
 
 本文只记录部署结构和操作命令，不包含任何密码、Token、Cookie 或密钥值。
 
+## 本地一键更新（推荐）
+
+配置根目录 `.deploy.config` 和 SSH KEY 后，在 Git Bash / Bash 中执行 `npm run deploy`；恢复最近一次备份执行 `npm run rollback`。完整首次配置、权限要求、故障恢复和数据保留说明见 [一键部署指南](docs/one-command-deployment.md)。新脚本使用 `/var/www/backup/runflow_年月日_时间_唯一编号/`；下文历史手工流程中的 `/var/backups/runflow/` 不参与自动回滚。新流程不运行数据库迁移或数据恢复。
+
 ## 生产信息
 
 - 生产域名：`https://xuehuayd.top`

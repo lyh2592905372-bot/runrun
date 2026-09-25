@@ -306,7 +306,7 @@ export default function AccountsPage() {
               />
               导出包含密码
             </label>
-            <button className="btn-secondary" onClick={exportExcel}>
+            <button id="excel-export" className="btn-secondary" onClick={exportExcel}>
               <Download className="h-4 w-4" />
               导出 Excel
             </button>
@@ -423,9 +423,11 @@ export default function AccountsPage() {
                 filtered.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/70">
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">{a.school?.name || "—"}</p>
-                      <p className="mt-1 text-xs text-slate-400">{platform}</p>
-                      <p className="mt-1 text-[11px] text-brand-600">{a.running_type?.name || "未设跑步类型"} · {a.face_option?.name || "未设人脸选项"}</p>
+                      <p className="whitespace-nowrap font-semibold text-slate-800">{a.school?.name || "—"}</p>
+                      {platform !== "运动世界" && <>
+                        <p className="mt-1 text-xs text-slate-400">{platform}</p>
+                        <p className="mt-1 text-[11px] text-brand-600">{a.running_type?.name || "未设跑步类型"} · {a.face_option?.name || "未设人脸选项"}</p>
+                      </>}
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-500">{a.running_type?.name || "—"}</td>
                     <td className="px-5 py-4 font-medium">{a.username}</td>
